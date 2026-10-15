@@ -25,19 +25,44 @@ Resources:
           Value: !Ref Project
         - Key: Stage
           Value: !Ref Stage
-      AccessControl: LogDeliveryWrite
       BucketName: !Sub '${Project}-${Stage}-logs'
       OwnershipControls:
         Rules:
-          - ObjectOwnership: BucketOwnerPreferred
+          - ObjectOwnership: BucketOwnerEnforced
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireAccessLogs
+            Status: Enabled
+            Prefix: 'FrontendS3/'
+            ExpirationInDays: 90
+    
+  FrontendS3BucketLogsPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FrontendS3BucketLogs
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: S3ServerAccessLogsPolicy
+            Effect: Allow
+            Principal:
+              Service: logging.s3.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${FrontendS3BucketLogs.Arn}/FrontendS3/*'
+            Condition:
+              ArnLike:
+                aws:SourceArn: !Sub 'arn:${AWS::Partition}:s3:::${Project}-${Stage}'
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
 
   FrontendS3Bucket:
     Type: AWS::S3::Bucket
+    DependsOn: FrontendS3BucketLogsPolicy
     Properties:
       Tags:
         - Key: Project
@@ -215,6 +240,7 @@ Resources:
               - OPTIONS
               - PUT
               - PATCH
+
         DefaultCacheBehavior:
           TargetOriginId: FrontendOrigin
           ViewerProtocolPolicy: redirect-to-https
