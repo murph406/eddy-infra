@@ -1,0 +1,230 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+Description: Serverless Lambda, S3, Cloudfront same-domain stack
+
+Parameters:
+  Project:
+    Type: String
+  Stage:
+    Type: String
+    AllowedValues:
+      - develop
+      - stage
+      - main
+    Description: develop, stage or main
+  ApiGatewayUrl:
+    Type: String
+    Description: Eddy API Gateway URL
+
+Resources:
+  FrontendS3BucketLogs:
+    Type: AWS::S3::Bucket
+    Properties:
+      Tags:
+        - Key: Project
+          Value: !Ref Project
+        - Key: Stage
+          Value: !Ref Stage
+      AccessControl: LogDeliveryWrite
+      BucketName: !Sub '${Project}-${Stage}-logs'
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  FrontendS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      Tags:
+        - Key: Project
+          Value: !Ref Project
+        - Key: Stage
+          Value: !Ref Stage
+      BucketName: !Sub '${Project}-${Stage}'
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      MetricsConfigurations:
+        - Id: !Sub '${Project}-${Stage}'
+      LoggingConfiguration:
+        DestinationBucketName: !Ref FrontendS3BucketLogs
+        LogFilePrefix: !Sub 'FrontendS3/'
+      VersioningConfiguration:
+        Status: Enabled
+
+  LambdaEdgeRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      Tags:
+        - Key: Project
+          Value: !Ref Project
+      Path: '/'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: 'AllowLambdaServiceToAssumeRole'
+            Effect: 'Allow'
+            Action:
+              - 'sts:AssumeRole'
+            Principal:
+              Service:
+                - 'lambda.amazonaws.com'
+                - 'edgelambda.amazonaws.com'
+
+  CloudfrontOriginRequestPolicy:
+    Type: AWS::CloudFront::OriginRequestPolicy
+    Properties:
+      OriginRequestPolicyConfig:
+        Name: !Sub 'originPolicyConfiguration${Stage}'
+        CookiesConfig:
+          CookieBehavior: none
+        HeadersConfig:
+          HeaderBehavior: none
+        QueryStringsConfig:
+          QueryStringBehavior: all
+
+  CloudfrontReactOriginRequestFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: >-
+        This Lambda function edits the incoming uri to redirect to the root
+      CodeUri: ./functions/originRequests/client
+      Handler: index.handler
+      Runtime: nodejs20.x
+      Timeout: 10
+      FunctionName: !Sub '${Project}-${Stage}-CloudfrontReactOriginRequest'
+      Role: !GetAtt LambdaEdgeRole.Arn
+
+  CloudfrontReactOriginRequestFunctionVersion:
+    Type: AWS::Lambda::Version
+    Properties:
+      FunctionName: !GetAtt CloudfrontReactOriginRequestFunction.Arn
+
+  CloudfrontNoCachePolicy:
+    Type: AWS::CloudFront::CachePolicy
+    Properties:
+      CachePolicyConfig:
+        DefaultTTL: 0
+        MaxTTL: 0
+        MinTTL: 0
+        Name: !Sub 'CloudfrontBackendNoCachePolicy${Stage}'
+        ParametersInCacheKeyAndForwardedToOrigin:
+          CookiesConfig:
+            CookieBehavior: none
+          HeadersConfig:
+            HeaderBehavior: none
+          QueryStringsConfig:
+            QueryStringBehavior: none
+          EnableAcceptEncodingGzip: false
+
+  CloudfrontCachePolicy:
+    Type: AWS::CloudFront::CachePolicy
+    Properties:
+      CachePolicyConfig:
+        DefaultTTL: 300
+        MaxTTL: 3600
+        MinTTL: 0
+        Name: !Sub 'CloudfrontCachePolicy${Stage}'
+        ParametersInCacheKeyAndForwardedToOrigin:
+          CookiesConfig:
+            CookieBehavior: none
+          HeadersConfig:
+            HeaderBehavior: none
+          QueryStringsConfig:
+            QueryStringBehavior: none
+          EnableAcceptEncodingGzip: true
+          EnableAcceptEncodingBrotli: true
+
+  CloudFrontOAC:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Description: Default Origin Access Control
+        Name: !Sub '${Project}-${Stage}_Static-Site-Cloudfront-OAC'
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  ApiResponsePolicy:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: !Sub '${Project}-${Stage}-API-Security-Response'
+        Comment: Response policy with security headers.
+        SecurityHeadersConfig:
+          ContentTypeOptions:
+            Override: true
+          FrameOptions:
+            FrameOption: DENY
+            Override: true
+          ReferrerPolicy:
+            ReferrerPolicy: strict-origin-when-cross-origin
+            Override: true
+          StrictTransportSecurity:
+            AccessControlMaxAgeSec: 31536000
+            IncludeSubdomains: false
+            Preload: false
+            Override: true
+          XSSProtection:
+            ModeBlock: true
+            Protection: true
+            Override: true
+
+  CloudfrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub '${Project}-${Stage}'
+        Origins:
+          - DomainName: !Sub '${ApiGatewayUrl}.execute-api.${AWS::Region}.amazonaws.com'
+            Id: ApiOrigin
+            CustomOriginConfig:
+              OriginReadTimeout: 30
+              HTTPSPort: 443
+              OriginProtocolPolicy: https-only
+            OriginPath: !Sub '/${Stage}'
+          - DomainName: !GetAtt FrontendS3Bucket.RegionalDomainName
+            Id: FrontendOrigin
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+            OriginAccessControlId: !GetAtt CloudFrontOAC.Id
+        CacheBehaviors:
+          - TargetOriginId: ApiOrigin
+            PathPattern: /api/v1*
+            ViewerProtocolPolicy: redirect-to-https
+            CachePolicyId: !GetAtt CloudfrontNoCachePolicy.Id
+            ResponseHeadersPolicyId: !GetAtt ApiResponsePolicy.Id
+            OriginRequestPolicyId: !GetAtt CloudfrontOriginRequestPolicy.Id
+            AllowedMethods:
+              - HEAD
+              - DELETE
+              - POST
+              - GET
+              - OPTIONS
+              - PUT
+              - PATCH
+        DefaultCacheBehavior:
+          TargetOriginId: FrontendOrigin
+          ViewerProtocolPolicy: redirect-to-https
+          CachePolicyId: !GetAtt CloudfrontCachePolicy.Id
+          OriginRequestPolicyId: !GetAtt CloudfrontOriginRequestPolicy.Id
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          LambdaFunctionAssociations:
+            - EventType: origin-request
+              IncludeBody: true
+              LambdaFunctionARN: !Join [ ':', [ !GetAtt CloudfrontReactOriginRequestFunction.Arn, !GetAtt CloudfrontReactOriginRequestFunctionVersion.Version ] ]
