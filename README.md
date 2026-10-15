@@ -1,12 +1,11 @@
-# Hoopfest Infra
+# Eddy Infra
 
-Infrastructure as code for the Hoopfest platform, managed with AWS SAM and CloudFormation.
+Infrastructure as code for the Eddy platform, managed with AWS SAM and CloudFormation.
 
 ## Architecture
 ```
 CloudFront Distribution
-├── /api/v1*       → API Gateway (hoopfest-api repo)
-├── /lookup*       → Lookup S3 bucket (static JSON files)
+├── /api/v1*       → API Gateway (eddy-api repo)
 └── /*             → Frontend S3 bucket (static admin panel)
 ```
 
@@ -22,9 +21,9 @@ CloudFront Distribution
 
 | Branch | Stack | CloudFront |
 |--------|-------|------------|
-| develop | hoopfest-develop | develop distribution |
-| stage | hoopfest-stage | stage distribution |
-| main | hoopfest-main | main distribution |
+| develop | eddy-develop | develop distribution |
+| stage | eddy-stage | stage distribution |
+| main | eddy-main | main distribution |
 
 ## Deployment
 
@@ -39,36 +38,14 @@ sam build && sam deploy --config-env develop
 
 | Bucket | Purpose |
 |--------|---------|
-| `hoopfest-{stage}` | Static admin panel |
-| `hoopfest-{stage}-lookups` | Static JSON lookup files |
-| `hoopfest-{stage}-logs` | CloudFront access logs |
+| `eddy-{stage}` | Static admin panel |
+| `eddy-{stage}-lookups` | Static JSON lookup files |
+| `eddy-{stage}-logs` | CloudFront access logs |
 
-## Lookup Files
-
-Static JSON files served from the `/lookup/*` CloudFront path. Files live in `src/lookups/` and are synced to S3 on every deploy.
-
-### App Config (`/lookup/app-config.json`)
-
-Controls global event state and timing.
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `eventStart` | string | ISO date string for event start |
-| `eventEnd` | string | ISO date string for event end |
-| `phase` | number | Current event phase |
-
-**Phase values:**
-
-| Value | Description |
-|-------|-------------|
-| `-1` | Pre event |
-| `0` | Event active |
-| `1` | Post event |
 
 ## Lambda@Edge Functions
 
 | Function | Trigger | Purpose |
 |----------|---------|---------|
 | `CloudfrontReactOriginRequest` | Default behavior | Redirects all routes to root for SPA |
-| `CloudfrontLookupOriginRequest` | `/lookup*` | Strips `/lookup` prefix before forwarding to S3 |
 
