@@ -1,0 +1,57 @@
+name: Deploy backend infrastructure
+on:
+  push:
+    branches: 
+      - develop
+      - stage
+      - main
+env: 
+  Project: ${{ vars.Project }}
+  ApiGatewayUrl: ${{ vars.API_GATEWAY_URL }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name }}
+    steps: 
+      - uses: actions/checkout@v3
+      - uses: aws-actions/setup-sam@v1
+      - name: Extract Branch Name
+        shell: bash
+        run: echo "Stage=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_ENV
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-region: 'us-east-1'
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+      - name: Check for SAM S3 Bucket
+        shell: bash
+        run: |
+          chmod +x ./scripts/setup/create-sam-cli-s3-bucket.sh
+          ./scripts/setup/create-sam-cli-s3-bucket.sh
+
+      - name: Set Overrides
+        shell: bash
+        run: |
+          chmod +x ./scripts/parameter-overrides/print.sh
+          chmod +x ./scripts/parameter-overrides/set.sh
+          ./scripts/parameter-overrides/set.sh
+          ./scripts/parameter-overrides/print.sh
+
+      - name: Build Cloudformation Package
+        run: |
+          aws cloudformation package \
+          --template-file ./index.yaml \
+          --output-template-file packaged-template.yaml \
+          --s3-bucket $Project-sam-cli
+
+      - name: Deploy Cloudformation
+        run: |
+          aws cloudformation deploy \
+          --template-file packaged-template.yaml \
+          --stack-name $Stage-$Project-cloudformation \
+          --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+          --parameter-overrides $(./scripts/parameter-overrides/print.sh) 
