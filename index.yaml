@@ -254,3 +254,30 @@ Resources:
             - EventType: origin-request
               IncludeBody: true
               LambdaFunctionARN: !Join [ ':', [ !GetAtt CloudfrontReactOriginRequestFunction.Arn, !GetAtt CloudfrontReactOriginRequestFunctionVersion.Version ] ]
+
+  FrontendS3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FrontendS3Bucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Id: !Sub 'Frontend-Bucket-OAC-Restricted-Policy-${Stage}'
+        Statement:
+          - Sid: 1
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Join ['', ['arn:aws:cloudfront::', !Sub '${AWS::AccountId}', ':distribution/', !GetAtt CloudfrontDistribution.Id]]
+            Action: s3:GetObject
+            Resource: !Join ['', [ !GetAtt FrontendS3Bucket.Arn, "/*"]]
+          - Sid: 2
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Join ['', ['arn:aws:cloudfront::', !Sub '${AWS::AccountId}', ':distribution/', !GetAtt CloudfrontDistribution.Id]]
+            Action: s3:ListBucket
+            Resource: !GetAtt FrontendS3Bucket.Arn
