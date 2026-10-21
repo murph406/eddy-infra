@@ -14,7 +14,7 @@ Parameters:
     Description: develop, stage or main
   ApiGatewayUrl:
     Type: String
-    Description: Eddy API Gateway URL
+    Description: Eddy API Gateway Url
 
 Resources:
   FrontendS3BucketLogs:
