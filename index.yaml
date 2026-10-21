@@ -19,6 +19,9 @@ Parameters:
 Resources:
   FrontendS3BucketLogs:
     Type: AWS::S3::Bucket
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: store access logs for the frontend S3 bucket, kept 90 days for troubleshooting
     Properties:
       Tags:
         - Key: Project

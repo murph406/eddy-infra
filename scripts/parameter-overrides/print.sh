@@ -1,7 +1,7 @@
 override_file=$(cat ./scripts/parameter-overrides/.overrides)
-set -f # turn off globbing
+set -f 
 IFS='
-' # split at newlines only
+' 
 
 overrides_split=($(cat ./scripts/parameter-overrides/.overrides))
 
