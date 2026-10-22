@@ -33,11 +33,13 @@ jobs:
           chmod +x ./scripts/create-sam-cli-s3-bucket.sh
           ./scripts/create-sam-cli-s3-bucket.sh
 
-      - name: Check for SAM S3 Bucket
+      - name: Set Overrides
         shell: bash
         run: |
-          chmod +x ./scripts/create-sam-cli-s3-bucket.sh
-          ./scripts/create-sam-cli-s3-bucket.sh
+          chmod +x ./scripts/print-parameter-overrides.sh
+          chmod +x ./scripts/set-parameter-overrides.sh
+          ./scripts/set-parameter-overrides.sh
+          ./scripts/print-parameter-overrides.sh
 
       - name: Build Cloudformation Package
         run: |
