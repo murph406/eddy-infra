@@ -101,7 +101,7 @@ Resources:
       VpcId: !Ref Vpc
       Tags:
         - Key: Name
-          Value: !Sub '${Project}-${Stage}-lambda-sg'
+          Value: !Sub '${Project}-${Stage}-lambda-security-group'
 
   DbSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -119,7 +119,21 @@ Resources:
           Description: Postgres from the VPC Lambda
       Tags:
         - Key: Name
-          Value: !Sub '${Project}-${Stage}-db-sg'
+          Value: !Sub '${Project}-${Stage}-db-security-group'
+
+  DbSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Tells RDS which private subnets it may place the database in.
+    Properties:
+      DBSubnetGroupDescription: Private subnets for RDS
+      SubnetIds:
+        - !Ref PrivateSubnetA
+        - !Ref PrivateSubnetB
+      Tags:
+        - Key: Name
+          Value: !Sub '${Project}-${Stage}-db-subnets'
           
   FrontendS3BucketLogs:
     Type: AWS::S3::Bucket
