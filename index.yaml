@@ -91,6 +91,36 @@ Resources:
       SubnetId: !Ref PrivateSubnetB
       RouteTableId: !Ref PrivateRouteTable
 
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Identifies the VPC Lambda so the database can allow it in.
+    Properties:
+      GroupDescription: VPC Lambda that queries the database
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${Project}-${Stage}-lambda-sg'
+
+  DbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Firewall for RDS. Only allows Postgres traffic from the Lambda security group.
+    Properties:
+      GroupDescription: RDS Postgres
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref LambdaSecurityGroup
+          Description: Postgres from the VPC Lambda
+      Tags:
+        - Key: Name
+          Value: !Sub '${Project}-${Stage}-db-sg'
+          
   FrontendS3BucketLogs:
     Type: AWS::S3::Bucket
     Metadata:
@@ -227,11 +257,14 @@ Resources:
 
   CloudfrontReactOriginRequestFunctionVersion:
     Type: AWS::Lambda::Version
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Metadata:
       com.aws.cloudformation.Context:
         why: published version of the origin-request function, required because CloudFront can only attach a specific Lambda@Edge version
     Properties:
       FunctionName: !Ref CloudfrontReactOriginRequestFunction
+      
 
   CloudfrontNoCachePolicy:
     Type: AWS::CloudFront::CachePolicy
