@@ -1,4 +1,4 @@
-echo "" >> scripts/parameter-overrides/.overrides
+echo "" >> scripts/.overrides
 
 array=(
   Stage
@@ -10,5 +10,5 @@ for i in "${array[@]}"
 do
     NAME=$(echo "$i")
     VAL=$(eval echo \${$i})
-    echo "${NAME}=\"${VAL}\"" >> scripts/parameter-overrides/.overrides
+    echo "${NAME}=\"${VAL}\"" >> scripts/.overrides
 done

@@ -30,16 +30,14 @@ jobs:
       - name: Check for SAM S3 Bucket
         shell: bash
         run: |
-          chmod +x ./scripts/setup/create-sam-cli-s3-bucket.sh
-          ./scripts/setup/create-sam-cli-s3-bucket.sh
+          chmod +x ./scripts/create-sam-cli-s3-bucket.sh
+          ./scripts/create-sam-cli-s3-bucket.sh
 
-      - name: Set Overrides
+      - name: Check for SAM S3 Bucket
         shell: bash
         run: |
-          chmod +x ./scripts/parameter-overrides/print.sh
-          chmod +x ./scripts/parameter-overrides/set.sh
-          ./scripts/parameter-overrides/set.sh
-          ./scripts/parameter-overrides/print.sh
+          chmod +x ./scripts/create-sam-cli-s3-bucket.sh
+          ./scripts/create-sam-cli-s3-bucket.sh
 
       - name: Build Cloudformation Package
         run: |
@@ -54,4 +52,4 @@ jobs:
           --template-file packaged-template.yaml \
           --stack-name $Stage-$Project-cloudformation \
           --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
-          --parameter-overrides $(./scripts/parameter-overrides/print.sh) 
+          --parameter-overrides $(./scripts/print-parameter-overrides.sh) 

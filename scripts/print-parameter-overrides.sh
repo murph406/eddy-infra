@@ -1,9 +1,9 @@
-override_file=$(cat ./scripts/parameter-overrides/.overrides)
+override_file=$(cat ./scripts/.overrides)
 set -f 
 IFS='
 ' 
 
-overrides_split=($(cat ./scripts/parameter-overrides/.overrides))
+overrides_split=($(cat ./scripts/.overrides))
 
 for i in "${overrides_split[@]}"
 do

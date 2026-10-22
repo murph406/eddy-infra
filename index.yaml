@@ -22,6 +22,9 @@ Resources:
     Metadata:
       com.aws.cloudformation.Context:
         why: store access logs for the frontend S3 bucket, kept 90 days for troubleshooting
+      guard:
+        SuppressedRules:
+          - S3_BUCKET_LOGGING_ENABLED
     Properties:
       Tags:
         - Key: Project
@@ -29,6 +32,8 @@ Resources:
         - Key: Stage
           Value: !Ref Stage
       BucketName: !Sub '${Project}-${Stage}-logs'
+      VersioningConfiguration:
+        Status: Enabled
       OwnershipControls:
         Rules:
           - ObjectOwnership: BucketOwnerEnforced
@@ -132,24 +137,33 @@ Resources:
           QueryStringBehavior: all
 
   CloudfrontReactOriginRequestFunction:
-    Type: AWS::Serverless::Function
+    Type: AWS::Lambda::Function
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Lambda@Edge origin-request function that rewrites incoming URIs to the root so the React app handles routing
     Properties:
       Description: >-
         This Lambda function edits the incoming uri to redirect to the root
-      CodeUri: ./functions/originRequests/client
+      Code: ./functions/originRequests/client
       Handler: index.handler
-      Runtime: nodejs20.x
+      Runtime: nodejs24.x
       Timeout: 10
       FunctionName: !Sub '${Project}-${Stage}-CloudfrontReactOriginRequest'
       Role: !GetAtt LambdaEdgeRole.Arn
 
   CloudfrontReactOriginRequestFunctionVersion:
     Type: AWS::Lambda::Version
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: published version of the origin-request function, required because CloudFront can only attach a specific Lambda@Edge version
     Properties:
-      FunctionName: !GetAtt CloudfrontReactOriginRequestFunction.Arn
+      FunctionName: !Ref CloudfrontReactOriginRequestFunction
 
   CloudfrontNoCachePolicy:
     Type: AWS::CloudFront::CachePolicy
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: disables CloudFront caching for backend/API requests so every call reaches the origin and responses are never stale
     Properties:
       CachePolicyConfig:
         DefaultTTL: 0
@@ -167,6 +181,9 @@ Resources:
 
   CloudfrontCachePolicy:
     Type: AWS::CloudFront::CachePolicy
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: caches frontend files at CloudFront edge locations (5 min default, 1 hour max) with gzip/brotli compression to speed up page loads and reduce S3 requests
     Properties:
       CachePolicyConfig:
         DefaultTTL: 300
@@ -185,6 +202,9 @@ Resources:
 
   CloudFrontOAC:
     Type: AWS::CloudFront::OriginAccessControl
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: lets CloudFront read from the private frontend S3 bucket using signed requests, so the bucket stays blocked from direct public access
     Properties:
       OriginAccessControlConfig:
         Description: Default Origin Access Control
@@ -195,6 +215,9 @@ Resources:
 
   ApiResponsePolicy:
     Type: AWS::CloudFront::ResponseHeadersPolicy
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: adds security headers (HSTS, no framing, no MIME sniffing, referrer policy) to API responses served through CloudFront
     Properties:
       ResponseHeadersPolicyConfig:
         Name: !Sub '${Project}-${Stage}-API-Security-Response'
@@ -220,6 +243,9 @@ Resources:
 
   CloudfrontDistribution:
     Type: AWS::CloudFront::Distribution
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: single HTTPS entry point for the app; serves the React frontend from the private S3 bucket and routes /api/v1* to API Gateway without caching
     Properties:
       DistributionConfig:
         Enabled: true
@@ -252,7 +278,6 @@ Resources:
               - OPTIONS
               - PUT
               - PATCH
-
         DefaultCacheBehavior:
           TargetOriginId: FrontendOrigin
           ViewerProtocolPolicy: redirect-to-https
@@ -265,7 +290,7 @@ Resources:
           LambdaFunctionAssociations:
             - EventType: origin-request
               IncludeBody: true
-              LambdaFunctionARN: !Join [ ':', [ !GetAtt CloudfrontReactOriginRequestFunction.Arn, !GetAtt CloudfrontReactOriginRequestFunctionVersion.Version ] ]
+              LambdaFunctionARN: !Ref CloudfrontReactOriginRequestFunctionVersion
 
   FrontendS3BucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -281,15 +306,15 @@ Resources:
               Service: cloudfront.amazonaws.com
             Condition:
               StringEquals:
-                AWS:SourceArn: !Join ['', ['arn:aws:cloudfront::', !Sub '${AWS::AccountId}', ':distribution/', !GetAtt CloudfrontDistribution.Id]]
+                AWS:SourceArn: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudfrontDistribution.Id}'
             Action: s3:GetObject
-            Resource: !Join ['', [ !GetAtt FrontendS3Bucket.Arn, "/*"]]
+            Resource: !Sub '${FrontendS3Bucket.Arn}/*'
           - Sid: 2
             Effect: Allow
             Principal:
               Service: cloudfront.amazonaws.com
             Condition:
               StringEquals:
-                AWS:SourceArn: !Join ['', ['arn:aws:cloudfront::', !Sub '${AWS::AccountId}', ':distribution/', !GetAtt CloudfrontDistribution.Id]]
+                AWS:SourceArn: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudfrontDistribution.Id}'
             Action: s3:ListBucket
             Resource: !GetAtt FrontendS3Bucket.Arn
