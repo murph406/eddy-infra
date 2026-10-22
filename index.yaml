@@ -17,6 +17,80 @@ Parameters:
     Description: Eddy API Gateway URL
 
 Resources:
+  Vpc:
+    Type: AWS::EC2::VPC
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: private network for the project's backend resources (e.g. database, Lambdas) so they can talk to each other without being exposed to the internet
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${Project}-${Stage}-vpc'
+        - Key: Project
+          Value: !Ref Project
+        - Key: Stage
+          Value: !Ref Stage
+
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: private subnet in the first availability zone for backend resources; one of two so the database/Lambdas keep running if one AWS data center has an outage
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Sub '${AWS::Region}a'
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${Project}-${Stage}-private-a'
+
+  PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: private subnet in the second availability zone, paired with PrivateSubnetA for redundancy; required by services like RDS that must span two zones
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Sub '${AWS::Region}b'
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${Project}-${Stage}-private-b'
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: routing rules for the private subnets; with no internet route, traffic stays inside the VPC
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${Project}-${Stage}-private-rt'
+
+  PrivateSubnetARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: applies the private routing rules to PrivateSubnetA
+    Properties:
+      SubnetId: !Ref PrivateSubnetA
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnetBRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: applies the private routing rules to PrivateSubnetB
+    Properties:
+      SubnetId: !Ref PrivateSubnetB
+      RouteTableId: !Ref PrivateRouteTable
+
   FrontendS3BucketLogs:
     Type: AWS::S3::Bucket
     Metadata:
