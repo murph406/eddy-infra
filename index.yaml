@@ -183,38 +183,38 @@ Resources:
         - Key: Name
           Value: !Sub '${Project}-${Stage}-db-subnets'
 
-  # Database:
-  #   Type: AWS::RDS::DBInstance
-  #   Condition: IsDbEnabled
-  #   DeletionPolicy: Snapshot
-  #   UpdateReplacePolicy: Snapshot
-  #   Metadata:
-  #     com.aws.cloudformation.Context:
-  #       why: Postgres + PostGIS server for water data and app data. Private, no public address.
-  #   Properties:
-  #     DBInstanceIdentifier: !Sub '${Project}-${Stage}-db'
-  #     Engine: postgres
-  #     EngineVersion: '18'
-  #     AutoMinorVersionUpgrade: true
-  #     DBInstanceClass: db.t4g.micro
-  #     AllocatedStorage: '20'
-  #     StorageType: gp3
-  #     StorageEncrypted: true
-  #     DBName: eddy
-  #     MasterUsername: dbadmin
-  #     MasterUserPassword: !Sub '{{resolve:ssm-secure:/eddy/${Stage}/db/password}}'
-  #     DBSubnetGroupName: !Ref DbSubnetGroup
-  #     VPCSecurityGroups:
-  #       - !Ref DbSecurityGroup
-  #     PubliclyAccessible: false
-  #     MultiAZ: false
-  #     BackupRetentionPeriod: 7
-  #     DeletionProtection: true
-  #     Tags:
-  #       - Key: Project
-  #         Value: !Ref Project
-  #       - Key: Stage
-  #         Value: !Ref Stage
+  Database:
+    Type: AWS::RDS::DBInstance
+    Condition: IsDbEnabled
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Postgres + PostGIS server for water data and app data. Private, no public address.
+    Properties:
+      DBInstanceIdentifier: !Sub '${Project}-${Stage}-db'
+      Engine: postgres
+      EngineVersion: '18'
+      AutoMinorVersionUpgrade: true
+      DBInstanceClass: db.t4g.micro
+      AllocatedStorage: '20'
+      StorageType: gp3
+      StorageEncrypted: true
+      DBName: eddy
+      MasterUsername: dbadmin
+      MasterUserPassword: !Sub '{{resolve:ssm-secure:/eddy/${Stage}/db/password}}'
+      DBSubnetGroupName: !Ref DbSubnetGroup
+      VPCSecurityGroups:
+        - !Ref DbSecurityGroup
+      PubliclyAccessible: false
+      MultiAZ: false
+      BackupRetentionPeriod: 7
+      DeletionProtection: false
+      Tags:
+        - Key: Project
+          Value: !Ref Project
+        - Key: Stage
+          Value: !Ref Stage
 
   FrontendS3BucketLogs:
     Type: AWS::S3::Bucket
