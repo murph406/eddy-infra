@@ -103,11 +103,43 @@ Resources:
         - Key: Name
           Value: !Sub '${Project}-${Stage}-lambda-security-group'
 
+  EicSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Firewall for the Instance Connect Endpoint. Only allows outbound Postgres traffic inside the VPC.
+    Properties:
+      GroupDescription: EC2 Instance Connect Endpoint
+      VpcId: !Ref Vpc
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          CidrIp: 10.0.0.0/16
+          Description: Postgres inside the VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${Project}-${Stage}-eic-sg'
+
+  InstanceConnectEndpoint:
+    Type: AWS::EC2::InstanceConnectEndpoint
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Free tunnel from a laptop into the private VPC, for psql and data loading.
+    Properties:
+      SubnetId: !Ref PrivateSubnetA
+      SecurityGroupIds:
+        - !Ref EicSecurityGroup
+      PreserveClientIp: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${Project}-${Stage}-eic'
+
   DbSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Metadata:
       com.aws.cloudformation.Context:
-        why: Firewall for RDS. Only allows Postgres traffic from the Lambda security group.
+        why: Firewall for RDS. Only allows Postgres traffic from the VPC Lambda and the Instance Connect Endpoint.
     Properties:
       GroupDescription: RDS Postgres
       VpcId: !Ref Vpc
@@ -117,9 +149,14 @@ Resources:
           ToPort: 5432
           SourceSecurityGroupId: !Ref LambdaSecurityGroup
           Description: Postgres from the VPC Lambda
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref EicSecurityGroup
+          Description: Postgres from the Instance Connect Endpoint
       Tags:
         - Key: Name
-          Value: !Sub '${Project}-${Stage}-db-security-group'
+          Value: !Sub '${Project}-${Stage}-db-sg'
 
   DbSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
@@ -134,7 +171,39 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${Project}-${Stage}-db-subnets'
-          
+
+  Database:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Postgres + PostGIS server for water data and app data. Private, no public address.
+    Properties:
+      DBInstanceIdentifier: !Sub '${Project}-${Stage}-db'
+      Engine: postgres
+      EngineVersion: '18'
+      AutoMinorVersionUpgrade: true
+      DBInstanceClass: db.t4g.micro
+      AllocatedStorage: '20'
+      StorageType: gp3
+      StorageEncrypted: true
+      DBName: eddy
+      MasterUsername: dbadmin
+      MasterUserPassword: !Sub '{{resolve:ssm-secure:/eddy/${Stage}/db/password}}'
+      DBSubnetGroupName: !Ref DbSubnetGroup
+      VPCSecurityGroups:
+        - !Ref DbSecurityGroup
+      PubliclyAccessible: false
+      MultiAZ: false
+      BackupRetentionPeriod: 7
+      DeletionProtection: true
+      Tags:
+        - Key: Project
+          Value: !Ref Project
+        - Key: Stage
+          Value: !Ref Stage
+
   FrontendS3BucketLogs:
     Type: AWS::S3::Bucket
     Metadata:
