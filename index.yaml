@@ -15,6 +15,17 @@ Parameters:
   ApiGatewayUrl:
     Type: String
     Description: Eddy API Gateway URL
+  DbEnabled:
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'false'
+    Description: Creates the RDS database when true, removes it when false
+
+Conditions:
+  IsDbEnabled:
+    Fn::Equals: [!Ref DbEnabled, 'true']
 
 Resources:
   Vpc:
@@ -174,6 +185,7 @@ Resources:
 
   Database:
     Type: AWS::RDS::DBInstance
+    Condition: IsDbEnabled
     DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
     Metadata:
