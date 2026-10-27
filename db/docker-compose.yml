@@ -1,0 +1,14 @@
+services:
+  db:
+    build: .
+    environment:
+      POSTGRES_USER: dbadmin
+      POSTGRES_PASSWORD: localpassword
+      POSTGRES_DB: eddy
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql
+
+volumes:
+  pgdata:
