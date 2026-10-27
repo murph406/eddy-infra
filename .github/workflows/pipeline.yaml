@@ -3,8 +3,8 @@ on:
   push:
     branches: 
       - develop
-      - stage
-      - main
+      # - stage
+      # - main
 env: 
   Project: ${{ vars.Project }}
   ApiGatewayUrl: ${{ vars.API_GATEWAY_URL }}
